@@ -1,20 +1,25 @@
-import enum
+from asyncio.windows_events import NULL
 from core import db
 from core.apis.decorators import Principal
 from core.libs import helpers, assertions
 from core.models.teachers import Teacher
 from core.models.students import Student
 from sqlalchemy.types import Enum as BaseEnum
+from enum import Enum
 
+class ExtendedEnum(Enum):
 
-class GradeEnum(str, enum.Enum):
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+class GradeEnum(str, ExtendedEnum):
     A = 'A'
     B = 'B'
     C = 'C'
     D = 'D'
 
-
-class AssignmentStateEnum(str, enum.Enum):
+class AssignmentStateEnum(str, Enum):
     DRAFT = 'DRAFT'
     SUBMITTED = 'SUBMITTED'
     GRADED = 'GRADED'
@@ -47,10 +52,8 @@ class Assignment(db.Model):
     def upsert(cls, assignment_new: 'Assignment'):
         if assignment_new.id is not None:
             assignment = Assignment.get_by_id(assignment_new.id)
+            assertions.assert_valid(assignment.state == AssignmentStateEnum.DRAFT,'only assignment in draft state can be edited')
             assertions.assert_found(assignment, 'No assignment with this id was found')
-            assertions.assert_valid(assignment.state == AssignmentStateEnum.DRAFT,
-                                    'only assignment in draft state can be edited')
-
             assignment.content = assignment_new.content
         else:
             assignment = assignment_new
@@ -60,12 +63,29 @@ class Assignment(db.Model):
         return assignment
 
     @classmethod
+    def upserts(cls, assignment_new: 'Assignment'):
+        
+        if assignment_new.id is not None:
+            assignment = Assignment.get_by_id(assignment_new.id)
+            assertions.assert_found(assignment)
+            assertions.assert_valid(assignment.teacher_id == assignment_new.teacher_id)
+            assertions.assert_valid(assignment.state == AssignmentStateEnum.SUBMITTED)
+            assertions.assert_valid1(assignment_new.grade in GradeEnum.list())
+            assertions.assert_valid(assignment.grade == NULL)
+            
+            assignment.grade = assignment_new.grade
+        
+        return assignment
+
+    @classmethod
     def submit(cls, _id, teacher_id, principal: Principal):
         assignment = Assignment.get_by_id(_id)
+        print(assignment.state)
         assertions.assert_found(assignment, 'No assignment with this id was found')
+        assertions.assert_valid(assignment.state in [AssignmentStateEnum.DRAFT], 'only a draft assignment can be submitted')
         assertions.assert_valid(assignment.student_id == principal.student_id, 'This assignment belongs to some other student')
         assertions.assert_valid(assignment.content is not None, 'assignment with empty content cannot be submitted')
-
+        
         assignment.teacher_id = teacher_id
         assignment.state = AssignmentStateEnum.SUBMITTED
         db.session.flush()
@@ -75,3 +95,6 @@ class Assignment(db.Model):
     @classmethod
     def get_assignments_by_student(cls, student_id):
         return cls.filter(cls.student_id == student_id).all()
+    @classmethod
+    def get_assignments_by_teacher(cls, teacher_id):
+        return cls.filter(cls.teacher_id == teacher_id).all()

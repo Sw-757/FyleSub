@@ -1,3 +1,5 @@
+from core.libs import helpers
+
 def test_get_assignments_student_1(client, h_student_1):
     response = client.get(
         '/student/assignments',
@@ -41,6 +43,17 @@ def test_post_assignment_student_1(client, h_student_1):
     assert data['state'] == 'DRAFT'
     assert data['teacher_id'] is None
 
+def test_assingment_exists(client, h_student_1):
+    response = client.post(
+        '/assignments',
+        headers=h_student_1,
+        json={
+            'id': 2212,
+            "content": "some updated text"
+        })
+    error_response = response.json
+    assert response.status_code == 404
+    assert error_response['error'] == 'NotFound'
 
 def test_submit_assignment_student_1(client, h_student_1):
     response = client.post(
@@ -58,7 +71,6 @@ def test_submit_assignment_student_1(client, h_student_1):
     assert data['state'] == 'SUBMITTED'
     assert data['teacher_id'] == 2
 
-
 def test_assingment_resubmitt_error(client, h_student_1):
     response = client.post(
         '/student/assignments/submit',
@@ -71,3 +83,7 @@ def test_assingment_resubmitt_error(client, h_student_1):
     assert response.status_code == 400
     assert error_response['error'] == 'FyleError'
     assert error_response["message"] == 'only a draft assignment can be submitted'
+
+
+
+
